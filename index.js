@@ -7,27 +7,34 @@ const proxy = httpProxy.createProxyServer({});
 
 // List of servers to balance the load
 const servers = [
-    { host: '3.92.240.199', port: 8079 },
-    { host: '3.83.165.81', port: 8079 },
+    { host: '100.25.119.242', port: 8080 },
+    { host: '3.87.69.252', port: 8080 },
     // Add more servers as needed
 ];
 
-// Previous values
-let previousCPU = 0;
-let previousMemory = 0;
-let previousConnections = 0;
+
 
 // Middleware to handle incoming requests
 app.use(async (req, res) => {
     let minLoad = Infinity;
     let minLoadServer = null;
 
+
+    let previousCPU = 0;
+    let previousMemory = 0;
+    let previousConnections = 0;
+
     for (const server of servers) {
         try {
-            const { data } = await axios.get(`http://${server.host}:7000/get-metrics`);
-            const { cpuUsage, memoryUsage, activeConnections } = data;
+            const { data } = await axios.get(`http://${server.host}:8000/get-metrics`);
+            console.log("data::",data);
+            let { cpuUsage, memoryUsage, activeConnections } = data;
+
+            console.log("cpuUsage:",cpuUsage,"memoryUsage:",memoryUsage,"activeConnections:",activeConnections);
             
-            // Calculate deltas
+            cpuUsage = parseFloat(cpuUsage.replace('%', '')); // Convert "20.45%" to 20.45
+            memoryUsage = parseFloat(memoryUsage.replace('%', '')); // Convert "20.45%" to 20.45
+            
             const deltaCPU = previousCPU - cpuUsage;
             const deltaMemory = previousMemory - memoryUsage;
             const deltaConnections = previousConnections - activeConnections;
@@ -35,7 +42,8 @@ app.use(async (req, res) => {
             // Normalize deltas to [0, 1]
             const normalizedDeltaCPU = Math.abs(deltaCPU) / 100; // Assuming previous and current CPU values are percentages
             const normalizedDeltaMemory = Math.abs(deltaMemory) / 100; // Assuming previous and current memory values are percentages
-            const normalizedDeltaConnections = Math.abs(deltaConnections) / 1000; // Assuming previous and current connection counts are percentages
+            const normalizedDeltaConnections = Math.abs(deltaConnections) / 1200; // Assuming previous and current connection counts are percentages
+            
 
             // Calculate weights
             const weights = [
@@ -48,6 +56,7 @@ app.use(async (req, res) => {
             const load = weights[0] * cpuUsage + weights[1] * memoryUsage + weights[2] * activeConnections;
 
             // Check if this server has minimum load
+            console.log("LOAD FOR---",server.host,"------load-",load,);
             if (load < minLoad) {
                 minLoad = load;
                 minLoadServer = server;
@@ -68,6 +77,7 @@ app.use(async (req, res) => {
         const target = `http://${host}:${port}`;
         proxy.web(req, res, { target });
         console.log(`Redirected to ${host}:${port}`);
+        console.log("***************************************************************");
     } else {
         res.status(500).send('Unable to find a server to handle the request');
     }
